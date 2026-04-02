@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Budget App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .upload-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .category-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .category-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .category-card.active {
+            border: 3px solid #4CAF50;
+            transform: translateY(-3px);
+        }
+        .category-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .category-card .amount {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        .category-card .percentage {
+            color: #999;
+            font-size: 13px;
+        }
+        .category-card .tx-count {
+            color: #4CAF50;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .transaction-list {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .transaction-list h2 {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .clear-filter {
+            font-size: 14px;
+            color: #4CAF50;
+            cursor: pointer;
+            text-decoration: underline;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            text-align: left;
+        }
+        td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+        }
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+        .total-bar {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 22px;
+            font-weight: bold;
+            color: #333;
+        }
+        .filter-banner {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            color: #333;
+        }
+        .edit-btn {
+            background: none;
+            border: 1px solid #4CAF50;
+            color: #4CAF50;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .edit-btn:hover {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .category-select {
+            padding: 3px;
+            border-radius: 4px;
+            border: 1px solid #4CAF50;
+            font-size: 12px;
+        }
+        .save-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>💰 My Budget App</h1>
+
+    <div class="upload-section">
+        <h2>Upload Your TD Bank Transactions</h2>
+        <p>Export your transactions as CSV from TD online banking and upload below</p>
+        <input type="file" id="csvFile" accept=".csv">
+        <br><br>
+        <button onclick="processFile()">Analyse My Spending</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+
+        // ----------------------------------------
+        // STORE ALL TRANSACTIONS GLOBALLY
+        // ----------------------------------------
+        let allTransactions = [];
+        let activeCategory = null;
+
+        // ----------------------------------------
+        // CATEGORIES AND KEYWORDS
+        // ----------------------------------------
+        const categories = {
+            '🍔 Food & Dining': [
+                'MCDONALD', 'COAL AND CURRY', 'HURRY CURRY', 'JAPADOG',
+                'ANNAPOORNA', 'KUNAFA', 'INDIAN DESIRE', 'FRUITY FRUITEA',
+                'DUTCH DREAMS', 'SOUTH AMERICANA', 'TAKE-OUT', 'RESTAURANT',
+                'PIZZA', 'BURGER', 'SUSHI', 'CAFE', 'COFFEE', 'TIM HORTON',
+                'STARBUCKS', 'SUBWAY', 'KFC', 'WENDY'
+            ],
+            '🛒 Groceries': [
+                'ARZ FINE FOODS', 'MERCATO', 'RED APPLE', 'LOBLAWS',
+                'WALMART', 'METRO', 'SOBEYS', 'FOOD BASICS', 'NO FRILLS',
+                'COSTCO', 'WHOLE FOODS', 'FARM BOY', 'GROCERY'
+            ],
+            '⛽ Gas & Transport': [
+                'PETRO-CANADA', 'SHELL', 'CANADIAN TIRE GAS', 'PIONEER STN',
+                'ESSO', 'HUSKY', 'SUNOCO', 'PARKING', 'TORONTO PARKING',
+                'UBER', 'LYFT', 'PRESTO', 'GO TRANSIT'
+            ],
+            '🎮 Gaming & Entertainment': [
+                'CHALLENGER GAMING', 'A-ZONE GAMING', 'TCKTWEB', 'PEEKABOO',
+                'NETFLIX', 'SPOTIFY', 'DISNEY', 'AMAZON PRIME', 'XBOX',
+                'PLAYSTATION', 'STEAM', 'APPLE.COM/BILL', 'CINEMA',
+                'CINEPLEX', 'TICKETMASTER', 'CODA'
+            ],
+            '📱 Bills & Subscriptions': [
+                'FIDO', 'ROGERS', 'GOOGLE ONE', 'BELL', 'TELUS',
+                'HYDRO', 'ENBRIDGE', 'INSURANCE', 'GOOGLE*',
+                'MICROSOFT', 'DROPBOX'
+            ],
+            '🏠 Home & Services': [
+                'TOPNOTCHMAID', 'HOME DEPOT', 'IKEA', 'CANADIAN TIRE',
+                'RONA', 'WAYFAIR', 'BED BATH'
+            ],
+            '🎓 Education': [
+                'U OF T', 'UNIVERSITY', 'COLLEGE', 'UDEMY', 'COURSERA'
+            ],
+            '🌿 Other': [
+                'CANNA CABANA'
+            ]
+        };
+
+        // ----------------------------------------
+        // FIGURE OUT CATEGORY FOR EACH TRANSACTION
+        // ----------------------------------------
+        function categorise(description) {
+            const upperDesc = description.toUpperCase();
+            for (const [category, keywords] of Object.entries(categories)) {
+                for (const keyword of keywords) {
+                    if (upperDesc.includes(keyword.toUpperCase())) {
+                        return category;
+                    }
+                }
+            }
+            return '❓ Uncategorised';
+        }
+
+        // ----------------------------------------
+        // READ THE FILE WHEN BUTTON IS CLICKED
+        // ----------------------------------------
+        function processFile() {
+            const file = document.getElementById('csvFile').files[0];
+            if (!file) {
+                alert('Please select a CSV file first!');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                analyseTransactions(text);
+            };
+            reader.readAsText(file);
+        }
+
+        // ----------------------------------------
+        // ANALYSE ALL TRANSACTIONS
+        // ----------------------------------------
+        function analyseTransactions(csvText) {
+            const lines = csvText.trim().split('\n');
+            allTransactions = [];
+            activeCategory = null;
+            const categoryTotals = {};
+
+            lines.forEach(line => {
+                const columns = line.split(',');
+                if (columns.length >= 3) {
+                    const date = columns[0].trim();
+                    const description = columns[1].trim();
+                    const amount = parseFloat(columns[2].trim());
+
+                    if (description && !isNaN(amount) && amount > 0) {
+                        const category = categorise(description);
+                        allTransactions.push({ date, description, amount, category });
+
+                        if (!categoryTotals[category]) {
+                            categoryTotals[category] = 0;
+                        }
+                        categoryTotals[category] += amount;
+                    }
+                }
+            });
+
+            for (const cat in categoryTotals) {
+                categoryTotals[cat] = Math.round(categoryTotals[cat] * 100) / 100;
+            }
+
+            displayResults(categoryTotals);
+        }
+
+        // ----------------------------------------
+        // FILTER TRANSACTIONS WHEN CARD IS CLICKED
+        // ----------------------------------------
+        function filterByCategory(category) {
+            if (activeCategory === category) {
+                activeCategory = null;
+            } else {
+                activeCategory = category;
+            }
+
+            document.querySelectorAll('.category-card').forEach(card => {
+                card.classList.remove('active');
+            });
+
+            if (activeCategory) {
+                const safeId = 'card-' + activeCategory.replace(/[^a-zA-Z0-9]/g, '_');
+                const activeCard = document.getElementById(safeId);
+                if (activeCard) activeCard.classList.add('active');
+            }
+
+            updateTransactionTable();
+        }
+
+        // ----------------------------------------
+        // CLEAR THE FILTER
+        // ----------------------------------------
+        function clearFilter() {
+            activeCategory = null;
+            document.querySelectorAll('.category-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            updateTransactionTable();
+        }
+
+        // ----------------------------------------
+        // SHOW EDIT DROPDOWN FOR A ROW
+        // ----------------------------------------
+        function editCategory(index) {
+            const row = document.getElementById('row-' + index);
+            const categoryOptions = Object.keys(categories).concat(['🌿 Other', '❓ Uncategorised']);
+            const currentCategory = allTransactions[index].category;
+
+            const selectHtml = `
+                <select class="category-select" id="select-${index}">
+                    ${categoryOptions.map(cat => `
+                        <option value="${cat}" ${cat === currentCategory ? 'selected' : ''}>${cat}</option>
+                    `).join('')}
+                </select>
+                <button class="save-btn" onclick="saveCategory(${index})">Save</button>
+            `;
+
+            row.cells[3].innerHTML = selectHtml;
+        }
+
+        // ----------------------------------------
+        // SAVE THE EDITED CATEGORY
+        // ----------------------------------------
+        function saveCategory(index) {
+            const select = document.getElementById('select-' + index);
+            const newCategory = select.value;
+            allTransactions[index].category = newCategory;
+
+            // Recalculate totals and refresh
+            const categoryTotals = {};
+            allTransactions.forEach(t => {
+                if (!categoryTotals[t.category]) {
+                    categoryTotals[t.category] = 0;
+                }
+                categoryTotals[t.category] += t.amount;
+            });
+
+            for (const cat in categoryTotals) {
+                categoryTotals[cat] = Math.round(categoryTotals[cat] * 100) / 100;
+            }
+
+            displayResults(categoryTotals);
+        }
+
+        // ----------------------------------------
+        // UPDATE TRANSACTION TABLE BASED ON FILTER
+        // ----------------------------------------
+        function updateTransactionTable() {
+            const filtered = activeCategory
+                ? allTransactions.map((t, i) => ({ ...t, originalIndex: i })).filter(t => t.category === activeCategory)
+                : allTransactions.map((t, i) => ({ ...t, originalIndex: i }));
+
+            const tableDiv = document.getElementById('transaction-table');
+            const filterBanner = document.getElementById('filter-banner');
+            const tableTitle = document.getElementById('table-title');
+
+            if (activeCategory) {
+                filterBanner.style.display = 'block';
+                filterBanner.innerHTML = `Showing <strong>${activeCategory}</strong> — ${filtered.length} transactions, total $${filtered.reduce((a, t) => a + t.amount, 0).toFixed(2)}`;
+                tableTitle.innerHTML = `${activeCategory} Transactions <button class="clear-filter" onclick="clearFilter()">✕ Show All</button>`;
+            } else {
+                filterBanner.style.display = 'none';
+                tableTitle.innerHTML = `All Transactions <span style="font-size:14px; color:#999">(${allTransactions.length} total)</span>`;
+            }
+
+            let rows = '';
+            filtered.forEach(t => {
+                rows += `
+                    <tr id="row-${t.originalIndex}">
+                        <td>${t.date}</td>
+                        <td>${t.description}</td>
+                        <td>$${t.amount.toFixed(2)}</td>
+                        <td>${t.category}</td>
+                        <td><button class="edit-btn" onclick="editCategory(${t.originalIndex})">✏️ Edit</button></td>
+                    </tr>
+                `;
+            });
+
+            tableDiv.innerHTML = rows;
+        }
+
+        // ----------------------------------------
+        // SHOW EVERYTHING ON THE PAGE
+        // ----------------------------------------
+        function displayResults(categoryTotals) {
+            const total = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
+
+            let html = '';
+
+            html += `
+                <div class="total-bar">
+                    💳 Total Spending: $${Math.round(total * 100) / 100}
+                    <div style="font-size:14px; font-weight:normal; color:#999; margin-top:5px">
+                        Click any category card to filter • Click ✏️ to edit a transaction
+                    </div>
+                </div>
+            `;
+
+            html += '<div class="summary-grid">';
+            for (const [category, amount] of Object.entries(categoryTotals)) {
+                const percentage = Math.round((amount / total) * 100);
+                const count = allTransactions.filter(t => t.category === category).length;
+                const safeId = 'card-' + category.replace(/[^a-zA-Z0-9]/g, '_');
+                html += `
+                    <div class="category-card"
+                         id="${safeId}"
+                         onclick="filterByCategory('${category.replace(/'/g, "\\'")}')">
+                        <h3>${category}</h3>
+                        <div class="amount">$${amount.toFixed(2)}</div>
+                        <div class="percentage">${percentage}% of spending</div>
+                        <div class="tx-count">${count} transaction${count !== 1 ? 's' : ''} — click to filter</div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+
+            html += `
+                <div class="transaction-list">
+                    <h2 id="table-title">All Transactions <span style="font-size:14px; color:#999">(${allTransactions.length} total)</span></h2>
+                    <div id="filter-banner" class="filter-banner" style="display:none"></div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Amount</th>
+                                <th>Category</th>
+                                <th>Edit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transaction-table"></tbody>
+                    </table>
+                </div>
+            `;
+
+            document.getElementById('results').innerHTML = html;
+            updateTransactionTable();
+        }
+
+    </script>
+</body>
+</html>
